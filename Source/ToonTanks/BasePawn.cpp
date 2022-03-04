@@ -3,6 +3,10 @@
 
 #include "BasePawn.h"
 #include "Components/CapsuleComponent.h"
+#include "DrawDebugHelpers.h"
+#include "Kismet/GameplayStatics.h"
+#include "Particles/ParticleSystem.h"
+#include "Projectile.h"
 
 // Sets default values
 ABasePawn::ABasePawn()
@@ -17,26 +21,52 @@ ABasePawn::ABasePawn()
 
 	TurretMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Turret Mesh"));
 	TurretMesh->SetupAttachment(BaseMesh);
+
+	ProjectileSpawnPoint = CreateDefaultSubobject<USceneComponent>(TEXT("Projectile Spawn"));
+	ProjectileSpawnPoint->SetupAttachment(TurretMesh);
 }
 
-// Called when the game starts or when spawned
-void ABasePawn::BeginPlay()
+void ABasePawn::RotateTurret(FVector LookAtTarget, float DeltaTime)
 {
-	Super::BeginPlay();
-	
+    FVector ToTarget = LookAtTarget - TurretMesh->GetComponentLocation();
+	FRotator LookAtRotation = FRotator(0.f, ToTarget.Rotation().Yaw, 0.f);
+	LookAtRotation = FMath::Lerp(TurretMesh->GetComponentRotation(), LookAtRotation, DeltaTime * TurretRotateSpeed);
+    TurretMesh->SetWorldRotation(LookAtRotation);
 }
 
-// Called every frame
-void ABasePawn::Tick(float DeltaTime)
+void ABasePawn::Fire()
 {
-	Super::Tick(DeltaTime);
+	FVector ProjectileSpawnLocation = ProjectileSpawnPoint->GetComponentLocation();
+	// DrawDebugSphere(
+	// 	GetWorld(), 
+	// 	ProjectileSpawnLocation, 
+	// 	10.f, 
+	// 	32, 
+	// 	FColor::Red,
+	// 	false,
+	// 	3.f);
 
+	AProjectile* Projectile = GetWorld()->SpawnActor<AProjectile>(
+		ProjectileClass, 
+		ProjectileSpawnLocation,
+		ProjectileSpawnPoint->GetComponentRotation()
+	);
+	Projectile->SetOwner(this);
 }
 
-// Called to bind functionality to input
-void ABasePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+void ABasePawn::HandleDestruction()
 {
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
+	// Visual/Sound effects with death
+	if (Explosion)
+	{
+		UGameplayStatics::SpawnEmitterAtLocation(this, Explosion, GetActorLocation(), GetActorRotation());
+	}
+	if (ExplosionSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, GetActorLocation());
+	}
+	if (DeathCameraShakeClass)
+	{
+		GetWorld()->GetFirstPlayerController()->ClientPlayCameraShake(DeathCameraShakeClass);
+	}
 }
-
